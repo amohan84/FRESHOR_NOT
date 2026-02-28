@@ -1,0 +1,32 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# Model weights (large files — store via DVC or share separately)
+model/*.pt
+model/*.h5
+model/*.pth
+model/*.onnx
+
+# Dataset (downloaded by train.py via Kaggle API)
+data/fresh-and-stale/
+
+# Kaggle credentials — NEVER commit
+.kaggle/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/settings.json
+.idea/
