@@ -1,9 +1,9 @@
 """
 FreshOrNot — Produce Intelligence
 Streamlit app powered by MobileNetV2 fine-tuned on the
-Swoyam2609 Fresh-and-Stale Classification Kaggle dataset.
+Swoyam2609 Fresh-and-Stale Classification dataset.
 
-Place your trained model at:  model/freshor_not.h5
+Place your trained model at:  model/freshor_not.pt
 If no model is found, the app falls back to a pixel-heuristic analyser.
 """
 
@@ -47,13 +47,26 @@ PRODUCE_PROFILES = {
     "potato":      {"fresh_max": 21, "stale_threshold": 7},
 }
 
-# Swoyam2609 dataset — class folder names (alphabetical order used by Keras)
+# Swoyam2609 dataset — class folder names in alphabetical order (matches ImageFolder)
 SWOYAM_CLASSES = [
-    "freshapples", "freshbanana", "freshbittergourd", "freshcapsicum",
-    "freshcucumber", "freshokra", "freshorange", "freshpotato", "freshtomato",
-    "rottenapples", "rottenbanana", "rottenbittergourd", "rottencapsicum",
-    "rottencucumber", "rottenokra", "rottenorange", "rottenpotato", "rottentomato",
+    "freshapples", "freshbanana", "freshbittergroud", "freshcapsicum",
+    "freshcucumber", "freshokra", "freshoranges", "freshpotato", "freshtomato",
+    "rottenapples", "rottenbanana", "rottenbittergroud", "rottencapsicum",
+    "rottencucumber", "rottenokra", "rottenoranges", "rottenpotato", "rottentomato",
 ]
+
+# Map each class folder name → PRODUCE_PROFILES key
+CLASS_TO_PRODUCE = {
+    "freshapples":       "apple",     "rottenapples":       "apple",
+    "freshbanana":       "banana",    "rottenbanana":       "banana",
+    "freshbittergroud":  "bittergourd","rottenbittergroud": "bittergourd",
+    "freshcapsicum":     "capsicum",  "rottencapsicum":     "capsicum",
+    "freshcucumber":     "cucumber",  "rottencucumber":     "cucumber",
+    "freshokra":         "okra",      "rottenokra":         "okra",
+    "freshoranges":      "orange",    "rottenoranges":      "orange",
+    "freshpotato":       "potato",    "rottenpotato":       "potato",
+    "freshtomato":       "tomato",    "rottentomato":       "tomato",
+}
 
 MODEL_PATH_PT  = os.path.join(os.path.dirname(__file__), "model", "freshor_not.pt")
 MODEL_PATH_H5  = os.path.join(os.path.dirname(__file__), "model", "freshor_not.h5")
@@ -272,7 +285,7 @@ def _shelf_days(is_fresh: bool, score: float, profile: dict) -> int:
     return max(0, round(profile["stale_threshold"] * (score / 0.42)))
 
 
-def heuristic_inference(arr: np.ndarray, produce: str) -> dict:
+def heuristic_inference(arr: np.ndarray) -> dict:
     """Pixel brightness/saturation heuristic — vivid colour = fresh, dull/brown = stale."""
     img = arr[0]
     r, g, b = float(np.mean(img[:, :, 0])), float(np.mean(img[:, :, 1])), float(np.mean(img[:, :, 2]))
@@ -286,19 +299,21 @@ def heuristic_inference(arr: np.ndarray, produce: str) -> dict:
     final = min(1.0, max(0.0, fresh_score + noise))
     is_fresh = final > 0.42
     conf = min(0.98, (0.72 + final * 0.25) if is_fresh else (0.68 + (1 - final) * 0.28))
-    profile = PRODUCE_PROFILES.get(produce, {"fresh_max": 8, "stale_threshold": 3})
+    profile = {"fresh_max": 8, "stale_threshold": 3}  # generic fallback (no class info)
     return {
         "label": "FRESH" if is_fresh else "STALE",
         "confidence": conf,
         "shelf_days": _shelf_days(is_fresh, final, profile),
         "fresh_score": final,
+        "produce": "unknown",
         "source": "Pixel Heuristic (no model loaded)",
     }
 
 
-def _parse_preds(preds_array) -> tuple[bool, float]:
-    """Parse model output (numpy array) into (is_fresh, confidence)."""
+def _parse_preds(preds_array) -> tuple[bool, float, str]:
+    """Parse model output into (is_fresh, confidence, detected_produce)."""
     n = preds_array.shape[-1]
+    detected_produce = "unknown"
     if n == 1:
         raw = float(preds_array.flat[0])
         is_fresh = raw >= 0.5
@@ -311,10 +326,11 @@ def _parse_preds(preds_array) -> tuple[bool, float]:
         conf = float(preds_array[0][idx])
         label_name = SWOYAM_CLASSES[idx] if idx < len(SWOYAM_CLASSES) else ""
         is_fresh = label_name.startswith("fresh")
-    return is_fresh, conf
+        detected_produce = CLASS_TO_PRODUCE.get(label_name, "unknown")
+    return is_fresh, conf, detected_produce
 
 
-def model_inference(model_tuple, img: Image.Image, produce: str) -> dict:
+def model_inference(model_tuple, img: Image.Image) -> dict:
     backend, model = model_tuple
 
     if backend == "pt":
@@ -330,7 +346,7 @@ def model_inference(model_tuple, img: Image.Image, produce: str) -> dict:
         else:
             preds = torch.softmax(out, dim=1).numpy() if out.shape[-1] > 1 else \
                     (1 / (1 + np.exp(-out.numpy())))
-        is_fresh, conf = _parse_preds(preds)
+        is_fresh, conf, detected_produce = _parse_preds(preds)
 
     else:  # TF / Keras
         arr = preprocess(img)
@@ -339,25 +355,26 @@ def model_inference(model_tuple, img: Image.Image, produce: str) -> dict:
             preds = raw[0]  # fresh_head
         else:
             preds = raw
-        is_fresh, conf = _parse_preds(preds)
+        is_fresh, conf, detected_produce = _parse_preds(preds)
 
     score = conf if is_fresh else (1.0 - conf)
-    profile = PRODUCE_PROFILES.get(produce, {"fresh_max": 8, "stale_threshold": 3})
+    profile = PRODUCE_PROFILES.get(detected_produce, {"fresh_max": 8, "stale_threshold": 3})
     return {
         "label": "FRESH" if is_fresh else "STALE",
         "confidence": conf,
         "shelf_days": _shelf_days(is_fresh, score, profile),
         "fresh_score": score,
+        "produce": detected_produce,
         "source": f"MobileNetV2 (Swoyam2609 · {backend.upper()})",
     }
 
 
-def run_inference(img: Image.Image, produce: str) -> dict:
+def run_inference(img: Image.Image) -> dict:
     model = load_model()
     if model is not None:
-        return model_inference(model, img, produce)
+        return model_inference(model, img)
     arr = preprocess(img)
-    return heuristic_inference(arr, produce)
+    return heuristic_inference(arr)
 
 
 def get_action(result: dict):
@@ -416,15 +433,6 @@ tab_scan, tab_history, tab_model = st.tabs(["SCAN", history_label, "MODEL"])
 # ════════════════════════════════════════════════════════════
 with tab_scan:
 
-    # Produce selector
-    st.markdown('<div class="meta-label">PRODUCE TYPE</div>', unsafe_allow_html=True)
-    produce = st.selectbox(
-        label="produce",
-        options=list(PRODUCE_PROFILES.keys()),
-        format_func=lambda x: x.capitalize(),
-        label_visibility="collapsed",
-    )
-
     # Image upload (mobile: camera or gallery)
     st.markdown('<div class="meta-label" style="margin-top:12px">CAPTURE / UPLOAD IMAGE</div>',
                 unsafe_allow_html=True)
@@ -441,10 +449,11 @@ with tab_scan:
 
         if st.button("▶  ANALYZE", use_container_width=True):
             with st.spinner("RUNNING INFERENCE…"):
-                result = run_inference(img, produce)
+                result = run_inference(img)
 
             action_text, action_color = get_action(result)
-            profile = PRODUCE_PROFILES[produce]
+            detected_produce = result["produce"]
+            profile = PRODUCE_PROFILES.get(detected_produce, {"fresh_max": 8, "stale_threshold": 3})
 
             # ── Result card ──
             st.markdown("<hr/>", unsafe_allow_html=True)
@@ -454,8 +463,12 @@ with tab_scan:
                 f'<div class="{badge_class}">{result["label"]}</div>',
                 unsafe_allow_html=True,
             )
-            st.markdown('<div class="meta-label" style="margin-top:4px">CLASSIFICATION · HEAD 1</div>',
-                        unsafe_allow_html=True)
+            produce_display = detected_produce.upper() if detected_produce != "unknown" else "UNRECOGNISED"
+            st.markdown(
+                f'<div class="meta-label" style="margin-top:4px">'
+                f'DETECTED: <span style="color:#bbb;letter-spacing:1px">{produce_display}</span></div>',
+                unsafe_allow_html=True,
+            )
 
             # Confidence + shelf days side by side
             c1, c2 = st.columns(2)
@@ -502,7 +515,7 @@ with tab_scan:
 
             # Save to history
             st.session_state.history.insert(0, {
-                "produce": produce,
+                "produce": result["produce"],
                 "result": result,
                 "ts": datetime.datetime.now(),
             })

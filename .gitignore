@@ -14,8 +14,9 @@ model/*.h5
 model/*.pth
 model/*.onnx
 
-# Dataset (downloaded by train.py via Kaggle API)
-data/fresh-and-stale/
+# Dataset (local archive — large, do not commit)
+data/
+archive/
 
 # Kaggle credentials — NEVER commit
 .kaggle/

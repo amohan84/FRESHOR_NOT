@@ -1,24 +1,20 @@
 """
 train.py — Fine-tune MobileNetV2 on Swoyam2609 Fresh-and-Stale dataset
 ──────────────────────────────────────────────────────────────────────
-Kaggle dataset:
-  https://www.kaggle.com/datasets/swoyam2609/fresh-and-stale-classification
+Dataset:  archive/dataset/Train  (Swoyam2609 Fresh-and-Stale)
 
 Setup:
-  1. pip install kaggle torch torchvision
-  2. Place kaggle.json in ~/.kaggle/kaggle.json
-     (get from kaggle.com → Account → Create New API Token)
-  3. python train.py
+  1. pip install torch torchvision
+  2. python train.py
 
 The script will:
-  • Download + extract the dataset from Kaggle automatically
+  • Read training data from archive/dataset/Train (80/20 train-val split)
   • Fine-tune MobileNetV2 (ImageNet pretrained) for fresh/stale classification
-  • Save the model to model/freshor_not.pt
+  • Save the best model to model/freshor_not.pt
 """
 
 import os
 import pathlib
-import subprocess
 import sys
 
 # ── Verify dependencies ───────────────────────────────────────────────────────
@@ -34,42 +30,20 @@ except ImportError:
     sys.exit(1)
 
 # ── Config ────────────────────────────────────────────────────────────────────
-DATASET_SLUG    = "swoyam2609/fresh-and-stale-classification"
-DATA_DIR        = pathlib.Path("data/fresh-and-stale")
+ARCHIVE_DIR     = pathlib.Path("archive/dataset")
+TRAIN_DIR       = ARCHIVE_DIR / "Train"
+VAL_SPLIT       = 0.2
 MODEL_DIR       = pathlib.Path("model")
 MODEL_PATH      = MODEL_DIR / "freshor_not.pt"
 IMG_SIZE        = 224
 BATCH_SIZE      = 32
-EPOCHS_FROZEN   = 10
-EPOCHS_FINETUNE = 5
+EPOCHS_FROZEN   = 3
+EPOCHS_FINETUNE = 2
 LR_HEAD         = 1e-3
 LR_FINETUNE     = 1e-4
 DEVICE          = "cuda" if torch.cuda.is_available() else "cpu"
 
 print(f"Using device: {DEVICE}")
-
-# ── Download dataset ──────────────────────────────────────────────────────────
-def download_dataset():
-    if DATA_DIR.exists() and any(DATA_DIR.rglob("*.jpg")):
-        print(f"✅  Dataset already cached at {DATA_DIR}")
-        return
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    print(f"📥  Downloading {DATASET_SLUG} …")
-    subprocess.run(
-        ["kaggle", "datasets", "download", "-d", DATASET_SLUG,
-         "--unzip", "-p", str(DATA_DIR)],
-        check=True,
-    )
-    print("✅  Download complete.")
-
-
-def find_split(name: str) -> pathlib.Path:
-    """Find Train/Test folder regardless of zip nesting."""
-    for candidate in DATA_DIR.rglob(name):
-        if candidate.is_dir():
-            return candidate
-    return DATA_DIR
-
 
 # ── Data transforms ───────────────────────────────────────────────────────────
 train_tf = T.Compose([
@@ -135,16 +109,24 @@ def eval_epoch(model, loader, criterion):
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 def train():
-    download_dataset()
+    print(f"Loading dataset from: {TRAIN_DIR}")
 
-    train_root = find_split("Train")
-    test_root  = find_split("Test")
-    print(f"Train dir: {train_root}\nTest  dir: {test_root}")
+    # Load full dataset with training transforms; we'll override val subset transforms below
+    full_ds   = datasets.ImageFolder(TRAIN_DIR, transform=train_tf)
+    n_classes = len(full_ds.classes)
+    print(f"Classes ({n_classes}): {full_ds.classes}")
 
-    train_ds = datasets.ImageFolder(train_root, transform=train_tf)
-    val_ds   = datasets.ImageFolder(test_root,  transform=val_tf)
-    n_classes = len(train_ds.classes)
-    print(f"Classes ({n_classes}): {train_ds.classes}")
+    # 80 / 20 train-val split (reproducible)
+    n_total   = len(full_ds)
+    n_val     = int(n_total * VAL_SPLIT)
+    n_train   = n_total - n_val
+    generator = torch.Generator().manual_seed(42)
+    train_ds, val_ds = torch.utils.data.random_split(full_ds, [n_train, n_val], generator=generator)
+
+    # Apply val transforms to the validation subset
+    val_ds.dataset = datasets.ImageFolder(TRAIN_DIR, transform=val_tf)
+
+    print(f"Split: {n_train} train / {n_val} val  (total {n_total})")
 
     train_loader = DataLoader(train_ds, BATCH_SIZE, shuffle=True,  num_workers=2, pin_memory=True)
     val_loader   = DataLoader(val_ds,   BATCH_SIZE, shuffle=False, num_workers=2, pin_memory=True)

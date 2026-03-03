@@ -1,7 +1,7 @@
 # FreshOrNot — Technical Specification
 
-**Version:** 1.0  
-**Date:** February 2026  
+**Version:** 1.1  
+**Date:** March 2026  
 **Status:** Active Development
 
 ---
@@ -14,14 +14,16 @@
 4. [Dataset](#4-dataset)
 5. [Model Architecture](#5-model-architecture)
 6. [Training Pipeline](#6-training-pipeline)
-7. [Inference Pipeline](#7-inference-pipeline)
-8. [Application UI](#8-application-ui)
-9. [Produce Profiles](#9-produce-profiles)
-10. [Installation & Setup](#10-installation--setup)
-11. [API Reference](#11-api-reference)
-12. [Performance Targets](#12-performance-targets)
-13. [Deployment](#13-deployment)
-14. [Future Roadmap](#14-future-roadmap)
+7. [Training Results](#7-training-results)
+8. [Inference Pipeline](#8-inference-pipeline)
+9. [Application UI](#9-application-ui)
+10. [Produce Profiles](#10-produce-profiles)
+11. [Installation & Setup](#11-installation--setup)
+12. [API Reference](#12-api-reference)
+13. [Performance Targets](#13-performance-targets)
+14. [App Screenshots](#14-app-screenshots)
+15. [Deployment](#15-deployment)
+16. [Future Roadmap](#16-future-roadmap)
 
 ---
 
@@ -111,6 +113,7 @@ freshor_not/
 | **Platform** | Kaggle |
 | **URL** | https://www.kaggle.com/datasets/swoyam2609/fresh-and-stale-classification |
 | **License** | Community Data License Agreement |
+| **Local path** | `archive/dataset/Train` |
 
 ### Class Structure
 
@@ -120,24 +123,26 @@ The dataset contains **18 classes** split evenly between fresh and rotten/stale 
 |---|---|---|
 | `freshapples` | `rottenapples` | Apple |
 | `freshbanana` | `rottenbanana` | Banana |
-| `freshbittergourd` | `rottenbittergourd` | Bitter Gourd |
+| `freshbittergroud` | `rottenbittergroud` | Bitter Gourd |
 | `freshcapsicum` | `rottencapsicum` | Capsicum |
 | `freshcucumber` | `rottencucumber` | Cucumber |
 | `freshokra` | `rottenokra` | Okra |
-| `freshorange` | `rottenorange` | Orange |
+| `freshoranges` | `rottenoranges` | Orange |
 | `freshpotato` | `rottenpotato` | Potato |
 | `freshtomato` | `rottentomato` | Tomato |
 
-### Directory Layout
+> **Note:** Class folder names match the Kaggle archive exactly (e.g. `freshoranges`, `freshbittergroud`).
+> `SWOYAM_CLASSES` in `app.py` and `CLASS_TO_PRODUCE` map these to normalised produce keys.
 
-```
-Train/
-├── freshapples/        ← positive class examples
-└── rottenapples/       ← negative class examples
-...
-Test/
-└── (same structure)
-```
+### Dataset Split
+
+The `archive/dataset/Train` folder is used for both training and validation via a reproducible 80/20 random split (seed 42):
+
+| Split | Images |
+|---|---|
+| Train | 18,896 (80%) |
+| Validation | 4,723 (20%) |
+| **Total** | **23,619** |
 
 ### Preprocessing
 
@@ -200,12 +205,11 @@ GlobalAveragePooling  ──  output: [B, 1280]
 ### Overview (`train.py`)
 
 ```
-1. kaggle datasets download   ←  requires ~/.kaggle/kaggle.json
-2. Extract to data/fresh-and-stale/
-3. Build ImageFolder datasets (Train + Test)
-4. Phase 1: freeze backbone, train head  (10 epochs, lr=1e-3)
-5. Phase 2: unfreeze last 4 backbone blocks, fine-tune (5 epochs, lr=1e-4)
-6. Save best checkpoint → model/freshor_not.pt
+1. Load archive/dataset/Train via ImageFolder
+2. Random 80/20 train-val split (seed=42)
+3. Phase 1: freeze backbone, train classifier head  (3 epochs, lr=1e-3)
+4. Phase 2: unfreeze last 4 backbone blocks, fine-tune (2 epochs, lr=1e-4)
+5. Save best val-accuracy checkpoint → model/freshor_not.pt
 ```
 
 ### Hyperparameters
@@ -216,7 +220,7 @@ GlobalAveragePooling  ──  output: [B, 1280]
 | Learning rate | `1e-3` | `1e-4` |
 | Scheduler | `ReduceLROnPlateau` (patience=2, factor=0.5) | `CosineAnnealingLR` |
 | Batch size | 32 | 32 |
-| Epochs | 10 | 5 |
+| Epochs | 3 | 2 |
 | Loss | CrossEntropyLoss | CrossEntropyLoss |
 | Backbone layers frozen | All | Last 4 blocks unfrozen |
 
@@ -227,16 +231,34 @@ The best validation-accuracy checkpoint is saved after every epoch that improves
 ### Requirements for Training
 
 ```bash
-pip install kaggle torch torchvision
-# Add Kaggle API key:
-# Windows: %USERPROFILE%\.kaggle\kaggle.json
-# macOS/Linux: ~/.kaggle/kaggle.json
+pip install torch torchvision
 python train.py
 ```
 
 ---
 
-## 7. Inference Pipeline
+## 7. Training Results
+
+### Phase 1 — Head Training (Frozen Backbone)
+
+| Epoch | Train Loss | Val Loss | Train Acc | Val Acc | Saved |
+|-------|-----------|---------|----------|--------:|-------|
+| 1 | 0.3738 | 0.1524 | 88.0% | 94.9% | ✅ |
+| 2 | 0.1833 | 0.0997 | 93.5% | 96.9% | ✅ |
+| 3 | 0.1526 | 0.1442 | 94.5% | 94.9% | |
+
+### Phase 2 — Fine-Tuning (Last 4 Backbone Layers Unfrozen)
+
+| Epoch | Train Loss | Val Loss | Train Acc | Val Acc | Saved |
+|-------|-----------|---------|----------|--------:|-------|
+| 1 | 0.1071 | 0.0641 | 96.3% | 97.8% | ✅ |
+| 2 | 0.0445 | 0.0399 | 98.3% | **98.7%** | ✅ |
+
+**Best val accuracy: 98.7%** — saved to `model/freshor_not.pt`
+
+---
+
+## 8. Inference Pipeline
 
 ### Model Loading (`load_model()`)
 
@@ -256,8 +278,10 @@ tensor = transform(image).unsqueeze(0)        # [1, 3, 224, 224]
 logits = model(tensor)                        # [1, 18]
 probs  = softmax(logits, dim=1)               # [1, 18]
 idx    = argmax(probs)                        # 0..17
-is_fresh = SWOYAM_CLASSES[idx].startswith("fresh")
-confidence = probs[0][idx]
+class_name       = SWOYAM_CLASSES[idx]        # e.g. "freshapples"
+is_fresh         = class_name.startswith("fresh")
+detected_produce = CLASS_TO_PRODUCE[class_name]  # e.g. "apple"
+confidence       = probs[0][idx]
 ```
 
 ### Pixel Heuristic Fallback
@@ -286,7 +310,7 @@ else:
 
 ---
 
-## 8. Application UI
+## 9. Application UI
 
 ### Technology Stack
 
@@ -302,11 +326,12 @@ else:
 ### Tabs
 
 #### SCAN Tab
-- Produce type selector (dropdown, 15 produce types)
 - Image uploader — accepts JPEG, PNG, WEBP
   - On mobile: triggers camera or photo library via browser file picker
 - **ANALYZE** button → spins inference, renders result card
-- Result card: Fresh/Stale badge · Confidence % + progress bar · Shelf Days + bar · Action recommendation
+- Result card: Fresh/Stale badge · **Auto-detected produce name** · Confidence % + progress bar · Shelf Days + bar · Action recommendation
+
+> Produce type is **automatically identified** from the model’s predicted class — no manual selection required.
 
 #### LOG Tab
 - Session inspection history (last N scans, in-memory)
@@ -330,7 +355,7 @@ else:
 
 ---
 
-## 9. Produce Profiles
+## 10. Produce Profiles
 
 Shelf-life ceilings and stale thresholds used to compute shelf-life days from freshness score:
 
@@ -354,7 +379,7 @@ Shelf-life ceilings and stale thresholds used to compute shelf-life days from fr
 
 ---
 
-## 10. Installation & Setup
+## 11. Installation & Setup
 
 ### Prerequisites
 
@@ -362,7 +387,6 @@ Shelf-life ceilings and stale thresholds used to compute shelf-life days from fr
 |---|---|
 | Python | 3.9 – 3.12 |
 | pip | ≥ 23 |
-| Kaggle account | Required for `train.py` only |
 
 ### Quick Start (App Only)
 
@@ -387,37 +411,34 @@ For mobile access on the same Wi-Fi: `http://<your-PC-IP>:8501`
 ### Full Pipeline (Train + Run)
 
 ```powershell
-# 1. Get Kaggle credentials
-#    kaggle.com → Account → Create New API Token → download kaggle.json
-#    Copy to: C:\Users\<you>\.kaggle\kaggle.json
+# 1. Install training deps
+pip install torch torchvision
 
-# 2. Install training deps
-pip install kaggle torch torchvision
-
-# 3. Train (~15–30 min on CPU, ~5 min on GPU)
+# 2. Train (~30 min on CPU)
 python train.py
 # → saves model/freshor_not.pt
 
-# 4. Restart app to load model
+# 3. Restart app to load model
 streamlit run app.py
 ```
 
 ---
 
-## 11. API Reference
+## 12. API Reference
 
-### `run_inference(img: PIL.Image, produce: str) → dict`
+### `run_inference(img: PIL.Image) → dict`
 
-Main inference entry point. Automatically selects best available backend.
+Main inference entry point. Automatically selects best available backend and auto-detects produce type.
 
 **Returns:**
 ```python
 {
-    "label":      str,    # "FRESH" or "STALE"
-    "confidence": float,  # 0.0 – 1.0
-    "shelf_days": int,    # estimated days remaining
-    "fresh_score": float, # raw freshness score 0.0 – 1.0
-    "source":     str,    # description of inference backend used
+    "label":       str,    # "FRESH" or "STALE"
+    "confidence":  float,  # 0.0 – 1.0
+    "shelf_days":  int,    # estimated days remaining
+    "fresh_score": float,  # raw freshness score 0.0 – 1.0
+    "produce":     str,    # auto-detected produce (e.g. "apple", "tomato")
+    "source":      str,    # inference backend description
 }
 ```
 
@@ -425,9 +446,9 @@ Main inference entry point. Automatically selects best available backend.
 
 Cached model loader. Returns `("pt", model)`, `("h5", model)`, or `None`.
 
-### `heuristic_inference(arr: np.ndarray, produce: str) → dict`
+### `heuristic_inference(arr: np.ndarray) → dict`
 
-Pixel-heuristic fallback. Same return shape as `run_inference`.
+Pixel-heuristic fallback. Same return shape as `run_inference`. Returns `produce: "unknown"`.
 
 ### `get_action(result: dict) → tuple[str, str]`
 
@@ -435,19 +456,55 @@ Returns `(action_text, hex_color)` for the recommendation banner.
 
 ---
 
-## 12. Performance Targets
+## 13. Performance Targets
 
-| Metric | Target | Notes |
-|---|---|---|
-| Inference latency | < 500 ms | CPU, 224×224 input |
-| Model accuracy | > 90% | Swoyam2609 test set |
-| App startup time | < 5 s | Model pre-cached after first load |
-| Mobile page load | < 3 s | Over local Wi-Fi |
-| Model file size | < 15 MB | MobileNetV2 + head (FP32) |
+| Metric | Target | Actual | Notes |
+|---|---|---|---|
+| Inference latency | < 500 ms | ~400 ms | CPU, 224×224 input |
+| Val accuracy | > 90% | **98.7%** | Swoyam2609 Train set, 80/20 split |
+| App startup time | < 5 s | < 3 s | Model pre-cached after first load |
+| Mobile page load | < 3 s | — | Over local Wi-Fi |
+| Model file size | < 15 MB | ~9 MB | MobileNetV2 + head (FP32) |
 
 ---
 
-## 13. Deployment
+## 14. App Screenshots
+
+> Images located in `docs/screenshots/`. Save each screenshot with the filename shown.
+
+### SCAN Tab — Fresh Result
+
+![SCAN Tab Fresh Result](docs/screenshots/scan_fresh.png)
+
+*Fresh apple scan: model auto-detects **APPLE**, returns **FRESH** verdict at **85% confidence** with **9 days** shelf life remaining. Recommended action: NO ACTION NEEDED.*
+
+---
+
+### SCAN Tab — Stale Result
+
+![SCAN Tab Stale Result](docs/screenshots/scan_stale.png)
+
+*Stale apple scan: model auto-detects **APPLE**, returns **STALE** verdict at **99% confidence** with **0 days** remaining. Recommended action: REMOVE IMMEDIATELY.*
+
+---
+
+### LOG Tab
+
+![LOG Tab](docs/screenshots/log_tab.png)
+
+*Session inspection log showing two apple scans: FRESH (9d remaining · 85% conf · 15:24:57) and STALE (0d remaining · 99% conf · 15:24:38). History persists for the session duration.*
+
+---
+
+### MODEL Tab
+
+![MODEL Tab](docs/screenshots/model_tab.png)
+
+*Architecture breakdown showing MobileNetV2 fine-tuned layers (INPUT → BACKBONE → TRANSITION → POOL → FC NECK → HEAD 1 → HEAD 2) and training configuration table. Green banner confirms PyTorch model loaded from `model/freshor_not.pt`.*
+
+---
+
+## 15. Deployment
 
 ### Local (default)
 
@@ -486,7 +543,7 @@ docker run -p 8501:8501 freshor-not
 
 ---
 
-## 14. Future Roadmap
+## 16. Future Roadmap
 
 | Priority | Feature | Notes |
 |---|---|---|
