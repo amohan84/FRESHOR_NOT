@@ -28,7 +28,7 @@ try:
 except ImportError:
     TF_AVAILABLE = False
 
-# ── Produce profiles (mirrors JSX) ───────────────────────────────────────────
+# ── Produce profiles ──────────────────────────────────────────────────────────
 PRODUCE_PROFILES = {
     "apple":       {"fresh_max": 10, "stale_threshold": 4},
     "banana":      {"fresh_max": 7,  "stale_threshold": 3},
@@ -47,7 +47,6 @@ PRODUCE_PROFILES = {
     "potato":      {"fresh_max": 21, "stale_threshold": 7},
 }
 
-# Swoyam2609 dataset — class folder names in alphabetical order (matches ImageFolder)
 SWOYAM_CLASSES = [
     "freshapples", "freshbanana", "freshbittergroud", "freshcapsicum",
     "freshcucumber", "freshokra", "freshoranges", "freshpotato", "freshtomato",
@@ -55,7 +54,6 @@ SWOYAM_CLASSES = [
     "rottencucumber", "rottenokra", "rottenoranges", "rottenpotato", "rottentomato",
 ]
 
-# Map each class folder name → PRODUCE_PROFILES key
 CLASS_TO_PRODUCE = {
     "freshapples":       "apple",     "rottenapples":       "apple",
     "freshbanana":       "banana",    "rottenbanana":       "banana",
@@ -68,9 +66,8 @@ CLASS_TO_PRODUCE = {
     "freshtomato":       "tomato",    "rottentomato":       "tomato",
 }
 
-MODEL_PATH_PT  = os.path.join(os.path.dirname(__file__), "model", "freshor_not.pt")
-MODEL_PATH_H5  = os.path.join(os.path.dirname(__file__), "model", "freshor_not.h5")
-MODEL_PATH     = MODEL_PATH_PT  # default
+MODEL_PATH_PT = os.path.join(os.path.dirname(__file__), "model", "freshor_not.pt")
+MODEL_PATH_H5 = os.path.join(os.path.dirname(__file__), "model", "freshor_not.h5")
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -80,23 +77,90 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# ── Dark industrial-organic CSS ───────────────────────────────────────────────
+# ── CSS: outer desktop bg + phone shell ──────────────────────────────────────
 st.markdown("""
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@700;800&display=swap');
 
-  html, body, [data-testid="stAppViewContainer"] {
-    background-color: #0a0a0a !important;
-    color: #e0e0e0;
-    font-family: 'DM Mono', 'Courier New', monospace;
+  /* ── Desktop background ── */
+  html, body {
+    background-color: #97a6c3 !important;
+    margin: 0;
+    padding: 0;
   }
-  [data-testid="stHeader"] { background: #0a0a0a !important; }
-  [data-testid="stSidebar"] { background: #0d0d0d !important; }
 
-  h1 { font-family: 'Syne', sans-serif !important; color: #fff !important; }
-  h2, h3 { font-family: 'Syne', sans-serif !important; color: #ccc !important; }
+  [data-testid="stAppViewContainer"] {
+    background: #97a6c3 !important;
+    min-height: 100vh !important;
+  }
 
-  /* Buttons */
+  [data-testid="stHeader"] { display: none !important; }
+  [data-testid="stSidebar"] { display: none !important; }
+  #MainMenu, footer, header { visibility: hidden; }
+
+  /* ── Phone shell ── */
+  [data-testid="stMain"] {
+    width: 390px !important;
+    min-width: 390px !important;
+    max-width: 390px !important;
+    height: calc(100vh - 40px) !important;
+    min-height: unset !important;
+    background: #ffffff !important;
+    border-radius: 50px !important;
+    border: 8px solid #1c1c1c !important;
+    box-shadow:
+      0 0 0 1px #000,
+      0 0 0 3px #2a2a2a,
+      0 50px 100px rgba(0,0,0,0.9),
+      inset 0 0 0 1px #111 !important;
+    overflow: hidden !important;
+    padding: 0 !important;
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+  }
+
+  /* Phone side buttons (decorative) */
+  [data-testid="stMain"]::before {
+    content: '';
+    position: absolute;
+    right: -11px;
+    top: 120px;
+    width: 4px;
+    height: 60px;
+    background: #97a6c3;
+    border-radius: 0 3px 3px 0;
+    box-shadow: 0 80px 0 #97a6c3;
+  }
+  [data-testid="stMain"]::after {
+    content: '';
+    position: absolute;
+    left: -11px;
+    top: 100px;
+    width: 4px;
+    height: 35px;
+    background: #97a6c3;
+    border-radius: 3px 0 0 3px;
+    box-shadow: 0 50px 0 #97a6c3, 0 95px 0 #97a6c3;
+  }
+
+  /* ── Inner scroll container ── */
+  [data-testid="stMainBlockContainer"] {
+    padding: 0 18px 30px 18px !important;
+    max-width: 390px !important;
+    overflow-y: auto !important;
+    height: calc(100vh - 134px) !important;
+    max-height: calc(100vh - 134px) !important;
+    box-sizing: border-box !important;
+  }
+
+  /* ── Typography ── */
+  * { font-family: 'DM Mono', 'Courier New', monospace; color: #000; }
+  h1 { font-family: 'Syne', sans-serif !important; color: #000 !important; }
+  h2, h3 { font-family: 'Syne', sans-serif !important; color: #000 !important; }
+
+  /* ── Buttons ── */
   .stButton > button {
     background: #7fff00 !important;
     color: #000 !important;
@@ -106,69 +170,66 @@ st.markdown("""
     border: none !important;
     border-radius: 4px !important;
     font-size: 12px !important;
+    width: 100% !important;
   }
   .stButton > button:hover { background: #9fe830 !important; }
 
-  /* Selectbox */
+  /* ── Selectbox ── */
   [data-testid="stSelectbox"] > div > div {
-    background: #111 !important;
+    background: #97a6c3 !important;
     border: 1px solid #222 !important;
-    color: #e0e0e0 !important;
+    color: #000 !important;
     font-family: 'DM Mono', monospace !important;
   }
 
-  /* File uploader */
+  /* ── File uploader ── */
   [data-testid="stFileUploader"] {
-    background: #0d0d0d !important;
+    background: #97a6c3 !important;
     border: 1px dashed #333 !important;
     border-radius: 6px !important;
   }
 
-  /* Tabs */
+  /* ── Tabs ── */
   .stTabs [data-baseweb="tab-list"] {
-    background: #0a0a0a !important;
+    background: #97a6c3 !important;
     border-bottom: 1px solid #1a1a1a;
     gap: 4px;
   }
   .stTabs [data-baseweb="tab"] {
     background: transparent !important;
-    color: #444 !important;
+    color: #000 !important;
     font-family: 'DM Mono', monospace !important;
     font-size: 11px !important;
     letter-spacing: 2px !important;
   }
   .stTabs [aria-selected="true"] {
-    color: #7fff00 !important;
+    color: #000 !important;
     border-bottom: 2px solid #7fff00 !important;
   }
 
-  /* Metric / info boxes */
+  /* ── Metric boxes ── */
   [data-testid="metric-container"] {
-    background: #0d0d0d !important;
+    background: #97a6c3 !important;
     border: 1px solid #1a1a1a !important;
     border-radius: 6px !important;
     padding: 10px !important;
   }
 
-  /* Progress bar */
-  .stProgress > div > div > div {
-    background: #7fff00 !important;
-  }
+  /* ── Progress bar ── */
+  .stProgress > div > div > div { background: #7fff00 !important; }
 
-  /* Dividers */
+  /* ── Dividers ── */
   hr { border-color: #1e1e1e !important; }
 
-  /* Caption text */
-  .stCaption { color: #555 !important; font-size: 9px !important; letter-spacing: 2px !important; }
+  /* ── Caption ── */
+  .stCaption { color: #000 !important; font-size: 9px !important; letter-spacing: 2px !important; }
 
-  /* Remove streamlit branding */
-  #MainMenu, footer, header { visibility: hidden; }
-
+  /* ── Custom badges / boxes ── */
   .fresh-badge {
     display: inline-block;
-    background: #0d1a0d;
+    background: #97a6c3;
     border: 1px solid #7fff0040;
-    color: #7fff00;
+    color: #000;
     font-family: 'Syne', sans-serif;
     font-size: 36px;
     font-weight: 800;
@@ -179,9 +240,9 @@ st.markdown("""
   }
   .stale-badge {
     display: inline-block;
-    background: #1a0d0d;
+    background: #97a6c3;
     border: 1px solid #ff3b3b40;
-    color: #ff3b3b;
+    color: #000;
     font-family: 'Syne', sans-serif;
     font-size: 36px;
     font-weight: 800;
@@ -192,7 +253,7 @@ st.markdown("""
   }
   .meta-label {
     font-size: 9px;
-    color: #555;
+    color: #000;
     letter-spacing: 2px;
     text-transform: uppercase;
     margin-bottom: 4px;
@@ -200,7 +261,7 @@ st.markdown("""
   .action-box {
     padding: 12px 16px;
     border-radius: 6px;
-    background: #080808;
+    background: #97a6c3;
     border: 1px solid #2a2a2a;
     font-size: 12px;
     letter-spacing: 1px;
@@ -213,8 +274,8 @@ st.markdown("""
     border-bottom: 1px solid #111;
     font-size: 11px;
   }
-  .model-key { color: #444; letter-spacing: 1px; font-size: 9px; }
-  .model-val { color: #bbb; }
+  .model-key { color: #000; letter-spacing: 1px; font-size: 9px; }
+  .model-val { color: #000; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -231,7 +292,6 @@ if "model_loaded" not in st.session_state:
 # ── Model loader ──────────────────────────────────────────────────────────────
 @st.cache_resource(show_spinner="Loading model…")
 def load_model():
-    # Try PyTorch .pt first
     if TORCH_AVAILABLE and os.path.exists(MODEL_PATH_PT):
         try:
             model = torch.load(MODEL_PATH_PT, map_location="cpu", weights_only=False)
@@ -239,20 +299,16 @@ def load_model():
             return ("pt", model)
         except Exception as e:
             st.warning(f"Could not load .pt model: {e}")
-
-    # Fall back to Keras .h5
     if TF_AVAILABLE and os.path.exists(MODEL_PATH_H5):
         try:
             m = tf.keras.models.load_model(MODEL_PATH_H5)
             return ("h5", m)
         except Exception as e:
             st.warning(f"Could not load .h5 model: {e}")
-
     return None
 
 
 # ── Inference helpers ─────────────────────────────────────────────────────────
-# ImageNet normalisation (used by both TF and PT MobileNetV2)
 _PT_TRANSFORM = None
 
 def _get_pt_transform():
@@ -266,15 +322,12 @@ def _get_pt_transform():
     return _PT_TRANSFORM
 
 def preprocess(img: Image.Image) -> np.ndarray:
-    """Returns numpy array (for heuristic / TF) — 1×224×224×3 float32."""
     img = img.convert("RGB").resize((224, 224))
     arr = np.array(img, dtype=np.float32) / 255.0
     return np.expand_dims(arr, axis=0)
 
 def preprocess_pt(img: Image.Image):
-    """Returns a PyTorch tensor 1×3×224×224."""
     return _get_pt_transform()(img.convert("RGB")).unsqueeze(0)
-
 
 def _shelf_days(is_fresh: bool, score: float, profile: dict) -> int:
     if is_fresh:
@@ -284,22 +337,19 @@ def _shelf_days(is_fresh: bool, score: float, profile: dict) -> int:
         ))
     return max(0, round(profile["stale_threshold"] * (score / 0.42)))
 
-
 def heuristic_inference(arr: np.ndarray) -> dict:
-    """Pixel brightness/saturation heuristic — vivid colour = fresh, dull/brown = stale."""
     img = arr[0]
     r, g, b = float(np.mean(img[:, :, 0])), float(np.mean(img[:, :, 1])), float(np.mean(img[:, :, 2]))
-    # Saturation: how vivid the dominant colour is (works for red, green, yellow produce)
     max_c = max(r, g, b)
     min_c = min(r, g, b)
-    saturation = (max_c - min_c) / (max_c + 1e-6)  # 0 = grey/brown, 1 = vivid
-    brightness = (r + g + b) / 3.0   # already 0‑1 (array was normalised by preprocess)
+    saturation = (max_c - min_c) / (max_c + 1e-6)
+    brightness = (r + g + b) / 3.0
     fresh_score = saturation * 0.55 + brightness * 0.45
     noise = (int(r * 17 + g * 31 + b * 13) % 23) / 100.0 - 0.115
     final = min(1.0, max(0.0, fresh_score + noise))
     is_fresh = final > 0.42
     conf = min(0.98, (0.72 + final * 0.25) if is_fresh else (0.68 + (1 - final) * 0.28))
-    profile = {"fresh_max": 8, "stale_threshold": 3}  # generic fallback (no class info)
+    profile = {"fresh_max": 8, "stale_threshold": 3}
     return {
         "label": "FRESH" if is_fresh else "STALE",
         "confidence": conf,
@@ -309,9 +359,7 @@ def heuristic_inference(arr: np.ndarray) -> dict:
         "source": "Pixel Heuristic (no model loaded)",
     }
 
-
 def _parse_preds(preds_array) -> tuple[bool, float, str]:
-    """Parse model output into (is_fresh, confidence, detected_produce)."""
     n = preds_array.shape[-1]
     detected_produce = "unknown"
     if n == 1:
@@ -329,30 +377,26 @@ def _parse_preds(preds_array) -> tuple[bool, float, str]:
         detected_produce = CLASS_TO_PRODUCE.get(label_name, "unknown")
     return is_fresh, conf, detected_produce
 
-
 def model_inference(model_tuple, img: Image.Image) -> dict:
     backend, model = model_tuple
-
     if backend == "pt":
         import torch
         tensor = preprocess_pt(img)
         with torch.no_grad():
             out = model(tensor)
-        # Handle tuple output (dual-head) or single tensor
         if isinstance(out, (list, tuple)):
             fresh_logit = out[0].numpy()
-            preds = 1 / (1 + np.exp(-fresh_logit))  # sigmoid
+            preds = 1 / (1 + np.exp(-fresh_logit))
             preds = preds.reshape(1, -1)
         else:
             preds = torch.softmax(out, dim=1).numpy() if out.shape[-1] > 1 else \
                     (1 / (1 + np.exp(-out.numpy())))
         is_fresh, conf, detected_produce = _parse_preds(preds)
-
-    else:  # TF / Keras
+    else:
         arr = preprocess(img)
         raw = model.predict(arr, verbose=0)
         if isinstance(raw, (list, tuple)):
-            preds = raw[0]  # fresh_head
+            preds = raw[0]
         else:
             preds = raw
         is_fresh, conf, detected_produce = _parse_preds(preds)
@@ -368,7 +412,6 @@ def model_inference(model_tuple, img: Image.Image) -> dict:
         "source": f"MobileNetV2 (Swoyam2609 · {backend.upper()})",
     }
 
-
 def run_inference(img: Image.Image) -> dict:
     model = load_model()
     if model is not None:
@@ -376,24 +419,44 @@ def run_inference(img: Image.Image) -> dict:
     arr = preprocess(img)
     return heuristic_inference(arr)
 
-
 def get_action(result: dict):
     label, days = result["label"], result["shelf_days"]
     if label == "STALE":
-        return ("REMOVE IMMEDIATELY", "#ff3b3b") if days == 0 else ("MARKDOWN NOW", "#ffb700")
-    return ("MONITOR CLOSELY", "#ffb700") if days <= 3 else ("NO ACTION NEEDED", "#7fff00")
-
+        return ("REMOVE IMMEDIATELY", "#000") if days == 0 else ("MARKDOWN NOW", "#000")
+    return ("MONITOR CLOSELY", "#000") if days <= 3 else ("NO ACTION NEEDED", "#000")
 
 def shelf_bar_html(days: int, max_days: int) -> str:
     pct = min(100, (days / max(max_days, 1)) * 100)
     color = "#7fff00" if days >= 5 else "#ffb700" if days >= 2 else "#ff3b3b"
     return f"""
-    <div style="position:relative;height:10px;background:#1a1a1a;border-radius:2px;overflow:hidden;margin:4px 0">
+    <div style="position:relative;height:10px;background:#97a6c3;border-radius:2px;overflow:hidden;margin:4px 0">
       <div style="position:absolute;left:0;top:0;height:100%;width:{pct:.1f}%;
                   background:{color};border-radius:2px;
                   box-shadow:0 0 12px {color}88;"></div>
     </div>"""
 
+
+# ── Phone notch ───────────────────────────────────────────────────────────────
+st.markdown("""
+<div style="width:100%;display:flex;justify-content:center;padding-top:14px;margin-bottom:2px">
+  <div style="width:126px;height:30px;background:#97a6c3;border-radius:0 0 20px 20px;
+              display:flex;align-items:center;justify-content:center;gap:8px">
+    <div style="width:8px;height:8px;background:#97a6c3;border-radius:50%;
+                border:1px solid #2a2a2a"></div>
+    <div style="width:44px;height:5px;background:#97a6c3;border-radius:3px"></div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+# ── Status bar ────────────────────────────────────────────────────────────────
+now = datetime.datetime.now().strftime("%H:%M")
+st.markdown(f"""
+<div style="display:flex;justify-content:space-between;padding:4px 16px 0 16px;
+            font-size:10px;color:#000;letter-spacing:1px">
+  <span>{now}</span>
+  <span>● ● ●</span>
+</div>
+""", unsafe_allow_html=True)
 
 # ── Header ────────────────────────────────────────────────────────────────────
 col_logo, col_status = st.columns([3, 1])
@@ -404,8 +467,8 @@ with col_logo:
                   display:flex;align-items:center;justify-content:center;font-size:20px">🥬</div>
       <div>
         <div style="font-family:'Syne',sans-serif;font-size:22px;font-weight:800;
-                    letter-spacing:-0.5px;color:#fff">FreshOrNot</div>
-        <div style="font-size:9px;color:#555;letter-spacing:2px">PRODUCE INTELLIGENCE v1.0</div>
+                    letter-spacing:-0.5px;color:#000">FreshOrNot</div>
+        <div style="font-size:9px;color:#000;letter-spacing:2px">PRODUCE INTELLIGENCE v1.0</div>
       </div>
     </div>
     """, unsafe_allow_html=True)
@@ -413,11 +476,11 @@ with col_logo:
 with col_status:
     model_exists = os.path.exists(MODEL_PATH_PT) or os.path.exists(MODEL_PATH_H5)
     indicator = "🟢" if model_exists else "🟡"
-    status_text = "MODEL READY" if model_exists else "HEURISTIC MODE"
+    status_text = "MODEL READY" if model_exists else "HEURISTIC"
     st.markdown(f"""
     <div style="text-align:right;padding-top:14px">
-      <div style="font-size:10px;color:#555;letter-spacing:1px">{indicator} {status_text}</div>
-      <div style="font-size:9px;color:#333;letter-spacing:1px">LOCAL · NO CLOUD</div>
+      <div style="font-size:10px;color:#000;letter-spacing:1px">{indicator} {status_text}</div>
+      <div style="font-size:9px;color:#000;letter-spacing:1px">LOCAL · NO CLOUD</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -432,8 +495,6 @@ tab_scan, tab_history, tab_model = st.tabs(["SCAN", history_label, "MODEL"])
 # SCAN TAB
 # ════════════════════════════════════════════════════════════
 with tab_scan:
-
-    # Image upload (mobile: camera or gallery)
     st.markdown('<div class="meta-label" style="margin-top:12px">CAPTURE / UPLOAD IMAGE</div>',
                 unsafe_allow_html=True)
     uploaded = st.file_uploader(
@@ -455,7 +516,6 @@ with tab_scan:
             detected_produce = result["produce"]
             profile = PRODUCE_PROFILES.get(detected_produce, {"fresh_max": 8, "stale_threshold": 3})
 
-            # ── Result card ──
             st.markdown("<hr/>", unsafe_allow_html=True)
 
             badge_class = "fresh-badge" if result["label"] == "FRESH" else "stale-badge"
@@ -466,19 +526,18 @@ with tab_scan:
             produce_display = detected_produce.upper() if detected_produce != "unknown" else "UNRECOGNISED"
             st.markdown(
                 f'<div class="meta-label" style="margin-top:4px">'
-                f'DETECTED: <span style="color:#bbb;letter-spacing:1px">{produce_display}</span></div>',
+                f'DETECTED: <span style="color:#000;letter-spacing:1px">{produce_display}</span></div>',
                 unsafe_allow_html=True,
             )
 
-            # Confidence + shelf days side by side
             c1, c2 = st.columns(2)
             with c1:
                 st.markdown('<div class="meta-label">CONFIDENCE</div>', unsafe_allow_html=True)
                 conf_pct = int(result["confidence"] * 100)
-                conf_color = "#7fff00" if conf_pct >= 80 else "#ffb700" if conf_pct >= 65 else "#ff3b3b"
+                conf_color = "#000"
                 st.markdown(
                     f'<div style="font-family:Syne,sans-serif;font-size:28px;font-weight:800;'
-                    f'color:{conf_color}">{conf_pct}<span style="font-size:13px;color:#555;'
+                    f'color:{conf_color}">{conf_pct}<span style="font-size:13px;color:#000;'
                     f'font-family:DM Mono,monospace">%</span></div>',
                     unsafe_allow_html=True,
                 )
@@ -488,8 +547,8 @@ with tab_scan:
                 st.markdown('<div class="meta-label">SHELF LIFE · HEAD 2</div>', unsafe_allow_html=True)
                 st.markdown(
                     f'<div style="font-family:Syne,sans-serif;font-size:28px;font-weight:800;'
-                    f'color:#fff">{result["shelf_days"]}'
-                    f'<span style="font-size:13px;color:#555;font-family:DM Mono,monospace"> days</span></div>',
+                    f'color:#000">{result["shelf_days"]}'
+                    f'<span style="font-size:13px;color:#000;font-family:DM Mono,monospace"> days</span></div>',
                     unsafe_allow_html=True,
                 )
                 st.markdown(
@@ -497,23 +556,20 @@ with tab_scan:
                     unsafe_allow_html=True,
                 )
 
-            # Action recommendation
             st.markdown(
                 f'<div class="action-box" style="color:{action_color};margin-top:12px">'
                 f'<span style="margin-right:8px">●</span>{action_text}'
-                f'<div style="font-size:9px;color:#444;margin-top:4px;font-weight:400">'
+                f'<div style="font-size:9px;color:#000;margin-top:4px;font-weight:400">'
                 f'RECOMMENDED ACTION</div></div>',
                 unsafe_allow_html=True,
             )
 
-            # Inference source badge
             st.markdown(
-                f'<div style="font-size:9px;color:#333;letter-spacing:1px;margin-top:8px;'
+                f'<div style="font-size:9px;color:#000;letter-spacing:1px;margin-top:8px;'
                 f'text-align:right">{result["source"]}</div>',
                 unsafe_allow_html=True,
             )
 
-            # Save to history
             st.session_state.history.insert(0, {
                 "produce": result["produce"],
                 "result": result,
@@ -521,11 +577,11 @@ with tab_scan:
             })
     else:
         st.markdown("""
-        <div style="text-align:center;padding:60px 0;color:#333;border:1px dashed #1e1e1e;
+        <div style="text-align:center;padding:60px 0;color:#000;border:1px dashed #1e1e1e;
                     border-radius:6px;margin-top:8px">
           <div style="font-size:40px;margin-bottom:12px">📷</div>
           <div style="font-size:11px;letter-spacing:2px">TAP TO CAPTURE / UPLOAD</div>
-          <div style="font-size:9px;margin-top:6px;color:#2a2a2a">JPEG · PNG · WEBP</div>
+          <div style="font-size:9px;margin-top:6px;color:#000">JPEG · PNG · WEBP</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -538,7 +594,7 @@ with tab_history:
 
     if not st.session_state.history:
         st.markdown("""
-        <div style="text-align:center;padding:60px 0;color:#333;font-size:11px;letter-spacing:2px">
+        <div style="text-align:center;padding:60px 0;color:#000;font-size:11px;letter-spacing:2px">
           NO SCANS YET
         </div>
         """, unsafe_allow_html=True)
@@ -549,17 +605,17 @@ with tab_history:
 
         for entry in st.session_state.history:
             r = entry["result"]
-            label_color = "#7fff00" if r["label"] == "FRESH" else "#ff3b3b"
+            label_color = "#000"
             profile = PRODUCE_PROFILES.get(entry["produce"], {"fresh_max": 8, "stale_threshold": 3})
             time_str = entry["ts"].strftime("%H:%M:%S")
             st.markdown(f"""
-            <div style="background:#0d0d0d;border:1px solid #1a1a1a;border-radius:6px;
+            <div style="background:#97a6c3;border:1px solid #1a1a1a;border-radius:6px;
                         padding:12px;margin-bottom:8px">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
                 <span style="font-size:14px;font-weight:600;color:{label_color}">{r["label"]}</span>
-                <span style="font-size:9px;color:#444">{time_str}</span>
+                <span style="font-size:9px;color:#000">{time_str}</span>
               </div>
-              <div style="font-size:10px;color:#666;margin-bottom:6px">
+              <div style="font-size:10px;color:#000;margin-bottom:6px">
                 {entry["produce"].upper()} · {r["shelf_days"]}d remaining · {int(r["confidence"]*100)}% conf
               </div>
               {shelf_bar_html(r["shelf_days"], profile["fresh_max"])}
@@ -573,16 +629,15 @@ with tab_history:
 with tab_model:
     st.markdown('<div class="meta-label">MODEL ARCHITECTURE</div>', unsafe_allow_html=True)
 
-    # Architecture card
     st.markdown("""
-    <div style="background:#0d0d0d;border:1px solid #1a1a1a;border-radius:6px;padding:16px;margin-bottom:12px">
+    <div style="background:#97a6c3;border:1px solid #1a1a1a;border-radius:6px;padding:16px;margin-bottom:12px">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
         <div style="width:3px;height:28px;background:#7fff00;border-radius:2px"></div>
         <div>
-          <div style="font-family:'Syne',sans-serif;font-size:15px;font-weight:800;color:#fff">
+          <div style="font-family:'Syne',sans-serif;font-size:15px;font-weight:800;color:#000">
             MobileNetV2 — Fine-Tuned
           </div>
-          <div style="font-size:9px;color:#555;letter-spacing:2px">SWOYAM2609 DATASET · RECOMMENDED</div>
+          <div style="font-size:9px;color:#000;letter-spacing:2px">SWOYAM2609 DATASET · RECOMMENDED</div>
         </div>
       </div>
     """, unsafe_allow_html=True)
@@ -599,15 +654,14 @@ with tab_model:
     for key, desc in layers:
         st.markdown(f"""
         <div style="display:flex;justify-content:space-between;
-                    padding:6px 8px;border-radius:3px;background:#111;margin-bottom:3px">
-          <span style="font-size:9px;color:#7fff00;letter-spacing:2px">{key}</span>
-          <span style="font-size:10px;color:#888">{desc}</span>
+                    padding:6px 8px;border-radius:3px;background:#97a6c3;margin-bottom:3px">
+          <span style="font-size:9px;color:#000;letter-spacing:2px">{key}</span>
+          <span style="font-size:10px;color:#000">{desc}</span>
         </div>
         """, unsafe_allow_html=True)
 
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # Training config
     st.markdown('<div class="meta-label">TRAINING CONFIGURATION</div>', unsafe_allow_html=True)
     config_rows = [
         ("DATASET",       "Swoyam2609 Fresh-and-Stale (Kaggle)"),
@@ -620,7 +674,7 @@ with tab_model:
         ("AUGMENTATION",  "Flip · Jitter · Random Crop"),
         ("INFERENCE",     "~300 ms CPU  /  ~30 ms GPU"),
     ]
-    st.markdown('<div style="background:#0d0d0d;border:1px solid #1a1a1a;border-radius:6px;padding:14px">',
+    st.markdown('<div style="background:#97a6c3;border:1px solid #1a1a1a;border-radius:6px;padding:14px">',
                 unsafe_allow_html=True)
     for k, v in config_rows:
         st.markdown(
@@ -630,7 +684,6 @@ with tab_model:
         )
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # Model file status
     st.markdown("<br/>", unsafe_allow_html=True)
     found_pt = os.path.exists(MODEL_PATH_PT)
     found_h5 = os.path.exists(MODEL_PATH_H5)
@@ -650,11 +703,9 @@ with tab_model:
             "+ Kaggle API key at `~/.kaggle/kaggle.json`"
         )
 
-
-# ── Footer ────────────────────────────────────────────────────────────────────
+# ── Home bar ──────────────────────────────────────────────────────────────────
 st.markdown("""
-<div style="text-align:center;padding:24px 0 8px 0;font-size:9px;
-            color:#2a2a2a;letter-spacing:2px">
-  FRESHORNOT · EDGE INFERENCE · NO CLOUD REQUIRED
+<div style="display:flex;justify-content:center;padding:16px 0 8px 0">
+  <div style="width:120px;height:4px;background:#97a6c3;border-radius:2px"></div>
 </div>
 """, unsafe_allow_html=True)
